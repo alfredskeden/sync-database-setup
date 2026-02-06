@@ -10,13 +10,17 @@ const LOCAL_COUCHDB_URL =
 const CLOUD_COUCHDB_URL =
   process.env.CLOUD_COUCHDB_URL || "http://admin:cloudpass@localhost:5985";
 const DATABASE_NAME = process.env.DATABASE_NAME || "app_data";
+const SYNC_MODE = process.env.SYNC_MODE || "bidirectional"; // "push" | "pull" | "bidirectional"
 
 const localCouch = nano(LOCAL_COUCHDB_URL);
 const cloudCouch = nano(CLOUD_COUCHDB_URL);
 
 let localDb;
 let cloudDb;
-let replicationActive = false;
+let replicationStatus = {
+  pushActive: false,
+  pullActive: false,
+};
 
 // ─── Middleware ─────────────────────────────────────────────────────
 app.use(cors());
@@ -59,37 +63,78 @@ async function initializeDatabases() {
   }
 }
 
-// ─── Replication (Local → Cloud) ───────────────────────────────────
-async function startReplication() {
-  if (replicationActive) {
-    console.log("Replication already active");
+// ─── Replication ───────────────────────────────────────────────────
+
+async function startPushReplication() {
+  if (replicationStatus.pushActive) {
+    console.log("Push replication already active");
     return;
   }
 
   try {
-    // Set up continuous replication from local to cloud
     await localCouch.db.replicate(
       DATABASE_NAME,
       `${CLOUD_COUCHDB_URL}/${DATABASE_NAME}`,
       { continuous: true, create_target: true }
     );
 
-    replicationActive = true;
+    replicationStatus.pushActive = true;
     console.log("Continuous replication started: Local → Cloud");
   } catch (err) {
-    console.error("Failed to start replication:", err.message);
+    console.error("Failed to start push replication:", err.message);
   }
+}
+
+async function startPullReplication() {
+  if (replicationStatus.pullActive) {
+    console.log("Pull replication already active");
+    return;
+  }
+
+  try {
+    await localCouch.db.replicate(
+      `${CLOUD_COUCHDB_URL}/${DATABASE_NAME}`,
+      DATABASE_NAME,
+      { continuous: true, create_target: true }
+    );
+
+    replicationStatus.pullActive = true;
+    console.log("Continuous replication started: Cloud → Local");
+  } catch (err) {
+    console.error("Failed to start pull replication:", err.message);
+  }
+}
+
+async function startReplication() {
+  if (SYNC_MODE === "push" || SYNC_MODE === "bidirectional") {
+    await startPushReplication();
+  }
+
+  if (SYNC_MODE === "pull" || SYNC_MODE === "bidirectional") {
+    await startPullReplication();
+  }
+
+  console.log(`Sync mode: ${SYNC_MODE}`);
 }
 
 // ─── Manual Sync Trigger ───────────────────────────────────────────
 async function triggerSync() {
   try {
-    const result = await localCouch.db.replicate(
+    // Push: Local → Cloud
+    const pushResult = await localCouch.db.replicate(
       DATABASE_NAME,
       `${CLOUD_COUCHDB_URL}/${DATABASE_NAME}`,
       { create_target: true }
     );
-    return result;
+
+    // Pull: Cloud → Local
+    const pullResult = await localCouch.db.replicate(
+      `${CLOUD_COUCHDB_URL}/${DATABASE_NAME}`,
+      DATABASE_NAME,
+      { create_target: true }
+    );
+
+    return { push: pushResult, pull: pullResult };
   } catch (err) {
     console.error("Sync failed:", err.message);
     throw err;
@@ -102,7 +147,8 @@ async function triggerSync() {
 app.get("/api/health", (_req, res) => {
   res.json({
     status: "ok",
-    replicationActive,
+    syncMode: SYNC_MODE,
+    replicationStatus,
     timestamp: new Date().toISOString(),
   });
 });
@@ -185,7 +231,7 @@ app.delete("/api/documents/:id", async (req, res) => {
   }
 });
 
-// Trigger manual sync
+// Trigger manual sync (always bidirectional)
 app.post("/api/sync", async (_req, res) => {
   try {
     const result = await triggerSync();
@@ -202,7 +248,8 @@ app.get("/api/sync/status", async (_req, res) => {
     const cloudInfo = await cloudCouch.db.get(DATABASE_NAME);
 
     res.json({
-      replicationActive,
+      syncMode: SYNC_MODE,
+      replicationStatus,
       local: {
         docCount: localInfo.doc_count,
         updateSeq: localInfo.update_seq,
@@ -240,6 +287,7 @@ async function start() {
     console.log(`Backend running on http://localhost:${PORT}`);
     console.log(`Local CouchDB: ${LOCAL_COUCHDB_URL}`);
     console.log(`Cloud CouchDB: ${CLOUD_COUCHDB_URL}`);
+    console.log(`Sync mode: ${SYNC_MODE}`);
   });
 }
 

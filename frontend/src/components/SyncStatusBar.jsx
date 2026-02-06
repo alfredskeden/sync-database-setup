@@ -29,10 +29,22 @@ export function SyncStatusBar({ syncStatus, isSyncing, onSync }) {
         </div>
 
         <div className="sync-bar__stat">
-          <span>Replication</span>
+          <span>Push</span>
           <strong>
-            {syncStatus?.replicationActive ? "Active" : "Inactive"}
+            {syncStatus?.replicationStatus?.pushActive ? "Active" : "Off"}
           </strong>
+        </div>
+
+        <div className="sync-bar__stat">
+          <span>Pull</span>
+          <strong>
+            {syncStatus?.replicationStatus?.pullActive ? "Active" : "Off"}
+          </strong>
+        </div>
+
+        <div className="sync-bar__stat">
+          <span>Mode</span>
+          <strong>{syncStatus?.syncMode ?? "..."}</strong>
         </div>
       </div>
 

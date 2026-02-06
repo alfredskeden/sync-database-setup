@@ -1,7 +1,17 @@
+# ─────────────────────────────────────────────────────────────────────
+# Consumer setup — for users connecting to a remote cloud CouchDB
+#
+# Usage:
+#   1. Copy .env.consumer.example to .env
+#   2. Set CLOUD_HOST to the IP/domain of the machine running the cloud CouchDB
+#   3. Set CLOUD_COUCH_USER / CLOUD_COUCH_PASS to the cloud credentials
+#   4. Run: docker compose -f docker-compose.consumer.yml up --build
+# ─────────────────────────────────────────────────────────────────────
+
 version: "3.8"
 
 services:
-  # ─── Local CouchDB (local-first database) ────────────────────────
+  # ─── Local CouchDB (consumer's own local-first database) ─────────
   couchdb-local:
     image: couchdb:3.3
     container_name: couchdb-local
@@ -20,27 +30,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # ─── Cloud CouchDB (shared database others connect to) ──────────
-  couchdb-cloud:
-    image: couchdb:3.3
-    container_name: couchdb-cloud
-    environment:
-      COUCHDB_USER: ${CLOUD_COUCH_USER}
-      COUCHDB_PASSWORD: ${CLOUD_COUCH_PASS}
-    ports:
-      - "5985:5984"
-    volumes:
-      - couchdb-cloud-data:/opt/couchdb/data
-      - ./couchdb-cloud.ini:/opt/couchdb/etc/local.d/cors.ini
-    networks:
-      - sync-network
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:5984/ || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # ─── Backend (sync service + API) ────────────────────────────────
+  # ─── Backend (syncs local ↔ remote cloud CouchDB) ───────────────
   backend:
     build:
       context: ./backend
@@ -49,15 +39,13 @@ services:
     environment:
       PORT: 3001
       LOCAL_COUCHDB_URL: http://${LOCAL_COUCH_USER}:${LOCAL_COUCH_PASS}@couchdb-local:5984
-      CLOUD_COUCHDB_URL: http://${CLOUD_COUCH_USER}:${CLOUD_COUCH_PASS}@couchdb-cloud:5984
+      CLOUD_COUCHDB_URL: http://${CLOUD_COUCH_USER}:${CLOUD_COUCH_PASS}@${CLOUD_HOST}:${CLOUD_PORT}
       DATABASE_NAME: ${DATABASE_NAME}
       SYNC_MODE: bidirectional
     ports:
       - "3001:3001"
     depends_on:
       couchdb-local:
-        condition: service_healthy
-      couchdb-cloud:
         condition: service_healthy
     networks:
       - sync-network
@@ -80,7 +68,6 @@ services:
 
 volumes:
   couchdb-local-data:
-  couchdb-cloud-data:
 
 networks:
   sync-network:
