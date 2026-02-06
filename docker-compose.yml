@@ -1,0 +1,85 @@
+version: "3.8"
+
+services:
+  # ─── Local CouchDB (local-first database) ────────────────────────
+  couchdb-local:
+    image: couchdb:3.3
+    container_name: couchdb-local
+    environment:
+      COUCHDB_USER: admin
+      COUCHDB_PASSWORD: localpass
+    ports:
+      - "5984:5984"
+    volumes:
+      - couchdb-local-data:/opt/couchdb/data
+    networks:
+      - sync-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5984/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Cloud CouchDB (remote database others read from) ────────────
+  couchdb-cloud:
+    image: couchdb:3.3
+    container_name: couchdb-cloud
+    environment:
+      COUCHDB_USER: admin
+      COUCHDB_PASSWORD: cloudpass
+    ports:
+      - "5985:5984"
+    volumes:
+      - couchdb-cloud-data:/opt/couchdb/data
+    networks:
+      - sync-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5984/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Backend (sync service + API) ────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sync-backend
+    environment:
+      PORT: 3001
+      LOCAL_COUCHDB_URL: http://admin:localpass@couchdb-local:5984
+      CLOUD_COUCHDB_URL: http://admin:cloudpass@couchdb-cloud:5984
+      DATABASE_NAME: app_data
+    ports:
+      - "3001:3001"
+    depends_on:
+      couchdb-local:
+        condition: service_healthy
+      couchdb-cloud:
+        condition: service_healthy
+    networks:
+      - sync-network
+    restart: unless-stopped
+
+  # ─── Frontend (React UI) ─────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: sync-frontend
+    environment:
+      VITE_API_URL: http://localhost:3001
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    networks:
+      - sync-network
+
+volumes:
+  couchdb-local-data:
+  couchdb-cloud-data:
+
+networks:
+  sync-network:
+    driver: bridge

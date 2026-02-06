@@ -1,0 +1,16 @@
+{
+  "name": "sync-backend",
+  "version": "1.0.0",
+  "description": "Backend service for local-first database sync",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.0",
+    "nano": "^10.1.4"
+  }
+}
