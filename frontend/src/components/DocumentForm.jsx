@@ -1,73 +1,116 @@
 import { useState, useId } from "react";
 
 export function DocumentForm({ onSubmit, isLoading }) {
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
-  const [category, setCategory] = useState("");
+  const [author, setAuthor] = useState("");
+  const [text, setText] = useState("");
+  const [posX, setPosX] = useState("");
+  const [posY, setPosY] = useState("");
+  const [posZ, setPosZ] = useState("");
 
-  const titleId = useId();
-  const contentId = useId();
-  const categoryId = useId();
+  const authorFieldId = useId();
+  const textFieldId = useId();
+  const posXId = useId();
+  const posYId = useId();
+  const posZId = useId();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    if (!text.trim()) return;
+
+    const now = Date.now();
+    const docId = `pi-${now.toString(16)}-${Math.random().toString(16).slice(2, 15)}`;
 
     await onSubmit({
-      title: title.trim(),
-      content: content.trim(),
-      category: category.trim() || "general",
-      type: "document",
+      id: docId,
+      author: author.trim() || docId.split("-").slice(0, 3).join("-"),
+      time: now,
+      pos: {
+        x: parseFloat(posX) || 0,
+        y: parseFloat(posY) || 0,
+        z: parseFloat(posZ) || 0,
+      },
+      text: text.trim(),
     });
 
-    setTitle("");
-    setContent("");
-    setCategory("");
+    setText("");
+    setPosX("");
+    setPosY("");
+    setPosZ("");
   };
 
   return (
     <form className="form" onSubmit={handleSubmit}>
       <div className="form-group">
-        <label htmlFor={titleId}>Title</label>
+        <label htmlFor={authorFieldId}>Author</label>
         <input
-          id={titleId}
+          id={authorFieldId}
           className="input"
           type="text"
-          placeholder="Document title..."
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Author ID (auto-generated if empty)..."
+          value={author}
+          onChange={(e) => setAuthor(e.target.value)}
+        />
+      </div>
+
+      <div className="form-group">
+        <label htmlFor={textFieldId}>Text</label>
+        <input
+          id={textFieldId}
+          className="input"
+          type="text"
+          placeholder="Message text..."
+          value={text}
+          onChange={(e) => setText(e.target.value)}
           required
         />
       </div>
 
-      <div className="form-group">
-        <label htmlFor={contentId}>Content</label>
-        <textarea
-          id={contentId}
-          className="input"
-          placeholder="Document content..."
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          rows={3}
-        />
-      </div>
-
-      <div className="form-group">
-        <label htmlFor={categoryId}>Category</label>
-        <input
-          id={categoryId}
-          className="input"
-          type="text"
-          placeholder="e.g. notes, tasks, ideas..."
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-        />
-      </div>
+      <fieldset className="form-group" style={{ border: "1px solid var(--border, #e2e8f0)", borderRadius: "8px", padding: "12px" }}>
+        <legend style={{ fontSize: "0.875rem", fontWeight: 500 }}>Position</legend>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px" }}>
+          <div>
+            <label htmlFor={posXId} style={{ fontSize: "0.75rem" }}>X</label>
+            <input
+              id={posXId}
+              className="input"
+              type="number"
+              step="any"
+              placeholder="0"
+              value={posX}
+              onChange={(e) => setPosX(e.target.value)}
+            />
+          </div>
+          <div>
+            <label htmlFor={posYId} style={{ fontSize: "0.75rem" }}>Y</label>
+            <input
+              id={posYId}
+              className="input"
+              type="number"
+              step="any"
+              placeholder="0"
+              value={posY}
+              onChange={(e) => setPosY(e.target.value)}
+            />
+          </div>
+          <div>
+            <label htmlFor={posZId} style={{ fontSize: "0.75rem" }}>Z</label>
+            <input
+              id={posZId}
+              className="input"
+              type="number"
+              step="any"
+              placeholder="0"
+              value={posZ}
+              onChange={(e) => setPosZ(e.target.value)}
+            />
+          </div>
+        </div>
+      </fieldset>
 
       <button
         type="submit"
         className="btn btn--primary"
-        disabled={isLoading || !title.trim()}
+        disabled={isLoading || !text.trim()}
       >
         {isLoading ? (
           <>
