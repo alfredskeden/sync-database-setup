@@ -76,7 +76,7 @@ function App() {
         setIsLoading(false);
       }
     },
-    [fetchLocalDocs, fetchCloudDocs, fetchSyncStatus]
+    [fetchLocalDocs, fetchCloudDocs, fetchSyncStatus],
   );
 
   const handleDeleteDocument = useCallback(
@@ -97,7 +97,7 @@ function App() {
         console.error("Failed to delete document:", err);
       }
     },
-    [fetchLocalDocs, fetchCloudDocs, fetchSyncStatus]
+    [fetchLocalDocs, fetchCloudDocs, fetchSyncStatus],
   );
 
   const handleManualSync = useCallback(async () => {
@@ -130,16 +130,6 @@ function App() {
           <div className="card-header">
             <span className="card-title">
               <span className="badge badge--local">Local</span>
-              Add Document
-            </span>
-          </div>
-          <DocumentForm onSubmit={handleAddDocument} isLoading={isLoading} />
-        </div>
-
-        <div className="card">
-          <div className="card-header">
-            <span className="card-title">
-              <span className="badge badge--local">Local</span>
               Local Documents ({localDocs.length})
             </span>
           </div>
@@ -149,8 +139,7 @@ function App() {
             emptyMessage="No local documents yet. Add one above."
           />
         </div>
-
-        <div className="card full-width">
+        <div className="card">
           <div className="card-header">
             <span className="card-title">
               <span className="badge badge--cloud">Cloud</span>
