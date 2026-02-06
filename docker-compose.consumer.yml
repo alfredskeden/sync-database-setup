@@ -41,7 +41,7 @@ services:
       LOCAL_COUCHDB_URL: http://${LOCAL_COUCH_USER}:${LOCAL_COUCH_PASS}@couchdb-local:5984
       CLOUD_COUCHDB_URL: http://${CLOUD_COUCH_USER}:${CLOUD_COUCH_PASS}@${CLOUD_HOST}:${CLOUD_PORT}
       DATABASE_NAME: ${DATABASE_NAME}
-      SYNC_MODE: bidirectional
+      SYNC_MODE: ${SYNC_MODE}
     ports:
       - "3001:3001"
     depends_on:
