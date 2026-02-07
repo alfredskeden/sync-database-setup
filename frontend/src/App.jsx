@@ -1,6 +1,5 @@
-import { useState, useEffect, useCallback, useId } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { SyncStatusBar } from "./components/SyncStatusBar.jsx";
-import { DocumentForm } from "./components/DocumentForm.jsx";
 import { DocumentList } from "./components/DocumentList.jsx";
 
 const API_BASE = "/api";
@@ -9,7 +8,6 @@ function App() {
   const [localDocs, setLocalDocs] = useState([]);
   const [cloudDocs, setCloudDocs] = useState([]);
   const [syncStatus, setSyncStatus] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
   const fetchLocalDocs = useCallback(async () => {
@@ -51,33 +49,6 @@ function App() {
     const interval = setInterval(refreshAll, 5000);
     return () => clearInterval(interval);
   }, [refreshAll]);
-
-  const handleAddDocument = useCallback(
-    async (doc) => {
-      setIsLoading(true);
-      try {
-        const res = await fetch(`${API_BASE}/documents`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(doc),
-        });
-
-        if (!res.ok) throw new Error("Failed to create document");
-
-        // Refresh local docs immediately, cloud after a delay (replication takes a moment)
-        await fetchLocalDocs();
-        setTimeout(() => {
-          fetchCloudDocs();
-          fetchSyncStatus();
-        }, 1500);
-      } catch (err) {
-        console.error("Failed to add document:", err);
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [fetchLocalDocs, fetchCloudDocs, fetchSyncStatus],
-  );
 
   const handleDeleteDocument = useCallback(
     async (id) => {
