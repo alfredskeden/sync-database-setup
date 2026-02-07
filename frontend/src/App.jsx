@@ -134,9 +134,6 @@ function App() {
           <h1>Cloud Database</h1>
           <p>Cloud documents</p>
         </header>
-
-        <DocumentForm onSubmit={handleAddDocument} isLoading={isLoading} cloudOnly />
-
         <div className="layout layout--single">
           <div className="card">
             <div className="card-header">
