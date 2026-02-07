@@ -4,6 +4,7 @@ import { DocumentForm } from "./components/DocumentForm.jsx";
 import { DocumentList } from "./components/DocumentList.jsx";
 
 const API_BASE = "/api";
+const CLOUD_ONLY = import.meta.env.VITE_CLOUD_ONLY === "true";
 
 function App() {
   const [localDocs, setLocalDocs] = useState([]);
@@ -12,17 +13,22 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
-  const fetchLocalDocs = useCallback(async () => {
+  const fetchDocs = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/documents`);
       const data = await res.json();
-      setLocalDocs(data);
+      if (CLOUD_ONLY) {
+        setCloudDocs(data);
+      } else {
+        setLocalDocs(data);
+      }
     } catch (err) {
-      console.error("Failed to fetch local docs:", err);
+      console.error("Failed to fetch documents:", err);
     }
   }, []);
 
   const fetchCloudDocs = useCallback(async () => {
+    if (CLOUD_ONLY) return; // In cloud-only mode, /api/documents already returns cloud docs
     try {
       const res = await fetch(`${API_BASE}/cloud/documents`);
       const data = await res.json();
@@ -33,6 +39,7 @@ function App() {
   }, []);
 
   const fetchSyncStatus = useCallback(async () => {
+    if (CLOUD_ONLY) return;
     try {
       const res = await fetch(`${API_BASE}/sync/status`);
       const data = await res.json();
@@ -43,8 +50,8 @@ function App() {
   }, []);
 
   const refreshAll = useCallback(async () => {
-    await Promise.all([fetchLocalDocs(), fetchCloudDocs(), fetchSyncStatus()]);
-  }, [fetchLocalDocs, fetchCloudDocs, fetchSyncStatus]);
+    await Promise.all([fetchDocs(), fetchCloudDocs(), fetchSyncStatus()]);
+  }, [fetchDocs, fetchCloudDocs, fetchSyncStatus]);
 
   useEffect(() => {
     refreshAll();
@@ -64,19 +71,23 @@ function App() {
 
         if (!res.ok) throw new Error("Failed to create document");
 
-        // Refresh local docs immediately, cloud after a delay (replication takes a moment)
-        await fetchLocalDocs();
-        setTimeout(() => {
-          fetchCloudDocs();
-          fetchSyncStatus();
-        }, 1500);
+        if (CLOUD_ONLY) {
+          await fetchDocs();
+        } else {
+          // Refresh local docs immediately, cloud after a delay (replication takes a moment)
+          await fetchDocs();
+          setTimeout(() => {
+            fetchCloudDocs();
+            fetchSyncStatus();
+          }, 1500);
+        }
       } catch (err) {
         console.error("Failed to add document:", err);
       } finally {
         setIsLoading(false);
       }
     },
-    [fetchLocalDocs, fetchCloudDocs, fetchSyncStatus],
+    [fetchDocs, fetchCloudDocs, fetchSyncStatus],
   );
 
   const handleDeleteDocument = useCallback(
@@ -88,16 +99,20 @@ function App() {
 
         if (!res.ok) throw new Error("Failed to delete document");
 
-        await fetchLocalDocs();
-        setTimeout(() => {
-          fetchCloudDocs();
-          fetchSyncStatus();
-        }, 1500);
+        if (CLOUD_ONLY) {
+          await fetchDocs();
+        } else {
+          await fetchDocs();
+          setTimeout(() => {
+            fetchCloudDocs();
+            fetchSyncStatus();
+          }, 1500);
+        }
       } catch (err) {
         console.error("Failed to delete document:", err);
       }
     },
-    [fetchLocalDocs, fetchCloudDocs, fetchSyncStatus],
+    [fetchDocs, fetchCloudDocs, fetchSyncStatus],
   );
 
   const handleManualSync = useCallback(async () => {
@@ -112,6 +127,35 @@ function App() {
     }
   }, [refreshAll]);
 
+  if (CLOUD_ONLY) {
+    return (
+      <div className="app">
+        <header className="app-header">
+          <h1>Cloud Database</h1>
+          <p>Cloud documents</p>
+        </header>
+
+        <DocumentForm onSubmit={handleAddDocument} isLoading={isLoading} cloudOnly />
+
+        <div className="layout layout--single">
+          <div className="card">
+            <div className="card-header">
+              <span className="card-title">
+                <span className="badge badge--cloud">Cloud</span>
+                Documents ({cloudDocs.length})
+              </span>
+            </div>
+            <DocumentList
+              documents={cloudDocs}
+              onDelete={handleDeleteDocument}
+              emptyMessage="No documents yet. Add one above."
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="app">
       <header className="app-header">
@@ -124,6 +168,8 @@ function App() {
         isSyncing={isSyncing}
         onSync={handleManualSync}
       />
+
+      <DocumentForm onSubmit={handleAddDocument} isLoading={isLoading} />
 
       <div className="layout">
         <div className="card">

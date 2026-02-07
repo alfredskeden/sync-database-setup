@@ -1,6 +1,6 @@
 import { useState, useId } from "react";
 
-export function DocumentForm({ onSubmit, isLoading }) {
+export function DocumentForm({ onSubmit, isLoading, cloudOnly }) {
   const [author, setAuthor] = useState("");
   const [text, setText] = useState("");
   const [posX, setPosX] = useState("");
@@ -117,6 +117,8 @@ export function DocumentForm({ onSubmit, isLoading }) {
             <span className="spinner" />
             Saving...
           </>
+        ) : cloudOnly ? (
+          "Save to Cloud Database"
         ) : (
           "Save to Local Database"
         )}

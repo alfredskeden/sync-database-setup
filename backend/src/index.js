@@ -5,18 +5,21 @@ import nano from "nano";
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+const CLOUD_ONLY = process.env.CLOUD_ONLY === "true";
 const LOCAL_COUCHDB_URL =
   process.env.LOCAL_COUCHDB_URL || "http://admin:localpass@localhost:5984";
 const CLOUD_COUCHDB_URL =
   process.env.CLOUD_COUCHDB_URL || "http://admin:cloudpass@localhost:5985";
 const DATABASE_NAME = process.env.DATABASE_NAME || "app_data";
-const SYNC_MODE = process.env.SYNC_MODE || "bidirectional"; // "push" | "pull" | "bidirectional"
+const SYNC_MODE = CLOUD_ONLY ? "none" : (process.env.SYNC_MODE || "bidirectional"); // "push" | "pull" | "bidirectional" | "none"
 
-const localCouch = nano(LOCAL_COUCHDB_URL);
+const localCouch = CLOUD_ONLY ? null : nano(LOCAL_COUCHDB_URL);
 const cloudCouch = nano(CLOUD_COUCHDB_URL);
 
 let localDb;
 let cloudDb;
+// In cloud-only mode, primaryDb points to cloudDb; otherwise it points to localDb
+let primaryDb;
 let replicationStatus = {
   pushActive: false,
   pullActive: false,
@@ -29,16 +32,19 @@ app.use(express.json());
 // ─── Database Initialization ───────────────────────────────────────
 async function initializeDatabases() {
   try {
-    // Create local database if it doesn't exist
-    try {
-      await localCouch.db.create(DATABASE_NAME);
-      console.log(`[Local] Created database: ${DATABASE_NAME}`);
-    } catch (err) {
-      if (err.statusCode === 412) {
-        console.log(`[Local] Database already exists: ${DATABASE_NAME}`);
-      } else {
-        throw err;
+    if (!CLOUD_ONLY) {
+      // Create local database if it doesn't exist
+      try {
+        await localCouch.db.create(DATABASE_NAME);
+        console.log(`[Local] Created database: ${DATABASE_NAME}`);
+      } catch (err) {
+        if (err.statusCode === 412) {
+          console.log(`[Local] Database already exists: ${DATABASE_NAME}`);
+        } else {
+          throw err;
+        }
       }
+      localDb = localCouch.db.use(DATABASE_NAME);
     }
 
     // Create cloud database if it doesn't exist
@@ -53,10 +59,12 @@ async function initializeDatabases() {
       }
     }
 
-    localDb = localCouch.db.use(DATABASE_NAME);
     cloudDb = cloudCouch.db.use(DATABASE_NAME);
 
-    console.log("Databases initialized successfully");
+    // In cloud-only mode, all operations go directly to the cloud database
+    primaryDb = CLOUD_ONLY ? cloudDb : localDb;
+
+    console.log(`Databases initialized successfully (cloud-only: ${CLOUD_ONLY})`);
   } catch (err) {
     console.error("Failed to initialize databases:", err.message);
     process.exit(1);
@@ -147,16 +155,17 @@ async function triggerSync() {
 app.get("/api/health", (_req, res) => {
   res.json({
     status: "ok",
+    cloudOnly: CLOUD_ONLY,
     syncMode: SYNC_MODE,
     replicationStatus,
     timestamp: new Date().toISOString(),
   });
 });
 
-// Get all documents from local database
+// Get all documents from the primary database (local or cloud)
 app.get("/api/documents", async (_req, res) => {
   try {
-    const result = await localDb.list({ include_docs: true });
+    const result = await primaryDb.list({ include_docs: true });
     const docs = result.rows
       .filter((row) => !row.id.startsWith("_"))
       .map((row) => row.doc);
@@ -169,7 +178,7 @@ app.get("/api/documents", async (_req, res) => {
 // Get a single document
 app.get("/api/documents/:id", async (req, res) => {
   try {
-    const doc = await localDb.get(req.params.id);
+    const doc = await primaryDb.get(req.params.id);
     res.json(doc);
   } catch (err) {
     if (err.statusCode === 404) {
@@ -179,7 +188,7 @@ app.get("/api/documents/:id", async (req, res) => {
   }
 });
 
-// Create a new document (saves to local, will sync to cloud)
+// Create a new document (saves to primary database)
 app.post("/api/documents", async (req, res) => {
   try {
     const doc = {
@@ -187,8 +196,8 @@ app.post("/api/documents", async (req, res) => {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    const result = await localDb.insert(doc);
-    const created = await localDb.get(result.id);
+    const result = await primaryDb.insert(doc);
+    const created = await primaryDb.get(result.id);
     res.status(201).json(created);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -198,7 +207,7 @@ app.post("/api/documents", async (req, res) => {
 // Update a document
 app.put("/api/documents/:id", async (req, res) => {
   try {
-    const existing = await localDb.get(req.params.id);
+    const existing = await primaryDb.get(req.params.id);
     const updated = {
       ...existing,
       ...req.body,
@@ -206,8 +215,8 @@ app.put("/api/documents/:id", async (req, res) => {
       _rev: existing._rev,
       updatedAt: new Date().toISOString(),
     };
-    const result = await localDb.insert(updated);
-    const doc = await localDb.get(result.id);
+    const result = await primaryDb.insert(updated);
+    const doc = await primaryDb.get(result.id);
     res.json(doc);
   } catch (err) {
     if (err.statusCode === 404) {
@@ -220,8 +229,8 @@ app.put("/api/documents/:id", async (req, res) => {
 // Delete a document
 app.delete("/api/documents/:id", async (req, res) => {
   try {
-    const doc = await localDb.get(req.params.id);
-    await localDb.destroy(doc._id, doc._rev);
+    const doc = await primaryDb.get(req.params.id);
+    await primaryDb.destroy(doc._id, doc._rev);
     res.json({ ok: true, id: doc._id });
   } catch (err) {
     if (err.statusCode === 404) {
@@ -231,8 +240,11 @@ app.delete("/api/documents/:id", async (req, res) => {
   }
 });
 
-// Trigger manual sync (always bidirectional)
+// Trigger manual sync (only available when not in cloud-only mode)
 app.post("/api/sync", async (_req, res) => {
+  if (CLOUD_ONLY) {
+    return res.json({ ok: true, message: "Cloud-only mode — no sync needed" });
+  }
   try {
     const result = await triggerSync();
     res.json({ ok: true, result });
@@ -244,10 +256,25 @@ app.post("/api/sync", async (_req, res) => {
 // Get sync status
 app.get("/api/sync/status", async (_req, res) => {
   try {
-    const localInfo = await localCouch.db.get(DATABASE_NAME);
     const cloudInfo = await cloudCouch.db.get(DATABASE_NAME);
 
+    if (CLOUD_ONLY) {
+      return res.json({
+        cloudOnly: true,
+        syncMode: SYNC_MODE,
+        replicationStatus,
+        cloud: {
+          docCount: cloudInfo.doc_count,
+          updateSeq: cloudInfo.update_seq,
+        },
+        inSync: true,
+      });
+    }
+
+    const localInfo = await localCouch.db.get(DATABASE_NAME);
+
     res.json({
+      cloudOnly: false,
       syncMode: SYNC_MODE,
       replicationStatus,
       local: {
@@ -281,13 +308,21 @@ app.get("/api/cloud/documents", async (_req, res) => {
 // ─── Start Server ──────────────────────────────────────────────────
 async function start() {
   await initializeDatabases();
-  await startReplication();
+
+  if (!CLOUD_ONLY) {
+    await startReplication();
+  }
 
   app.listen(PORT, () => {
     console.log(`Backend running on http://localhost:${PORT}`);
-    console.log(`Local CouchDB: ${LOCAL_COUCHDB_URL}`);
-    console.log(`Cloud CouchDB: ${CLOUD_COUCHDB_URL}`);
-    console.log(`Sync mode: ${SYNC_MODE}`);
+    if (CLOUD_ONLY) {
+      console.log(`Mode: Cloud-only`);
+      console.log(`Cloud CouchDB: ${CLOUD_COUCHDB_URL}`);
+    } else {
+      console.log(`Local CouchDB: ${LOCAL_COUCHDB_URL}`);
+      console.log(`Cloud CouchDB: ${CLOUD_COUCHDB_URL}`);
+      console.log(`Sync mode: ${SYNC_MODE}`);
+    }
   });
 }
 

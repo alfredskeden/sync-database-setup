@@ -64,6 +64,12 @@ body {
   gap: 1.5rem;
 }
 
+.layout--single {
+  grid-template-columns: 1fr;
+  max-width: 700px;
+  margin: 0 auto;
+}
+
 @media (max-width: 768px) {
   .layout {
     grid-template-columns: 1fr;

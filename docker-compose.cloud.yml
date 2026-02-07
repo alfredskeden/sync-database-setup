@@ -1,0 +1,76 @@
+# ─────────────────────────────────────────────────────────────────────
+# Cloud-only setup — runs only the cloud CouchDB with no local database
+#
+# Usage:
+#   1. Copy .env.cloud.example to .env
+#   2. Set CLOUD_COUCH_USER / CLOUD_COUCH_PASS to desired credentials
+#   3. Run: docker compose -f docker-compose.cloud.yml up --build
+# ─────────────────────────────────────────────────────────────────────
+
+version: "3.8"
+
+services:
+  # ─── Cloud CouchDB (the only database) ─────────────────────────────
+  couchdb-cloud:
+    image: couchdb:3.3
+    container_name: couchdb-cloud
+    environment:
+      COUCHDB_USER: ${CLOUD_COUCH_USER}
+      COUCHDB_PASSWORD: ${CLOUD_COUCH_PASS}
+    ports:
+      - "5984:5984"
+    volumes:
+      - couchdb-cloud-data:/opt/couchdb/data
+      - ./couchdb-cloud.ini:/opt/couchdb/etc/local.d/cors.ini
+    networks:
+      - cloud-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5984/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Backend (cloud-only API, no sync/replication) ─────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cloud-backend
+    environment:
+      PORT: 3001
+      CLOUD_COUCHDB_URL: http://${CLOUD_COUCH_USER}:${CLOUD_COUCH_PASS}@couchdb-cloud:5984
+      DATABASE_NAME: ${DATABASE_NAME}
+      CLOUD_ONLY: "true"
+    ports:
+      - "3001:3001"
+    depends_on:
+      couchdb-cloud:
+        condition: service_healthy
+    networks:
+      - cloud-network
+    restart: unless-stopped
+
+  # ─── Frontend (React UI — cloud-only view) ─────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_CLOUD_ONLY: "true"
+    container_name: cloud-frontend
+    environment:
+      VITE_API_URL: http://localhost:3001
+      VITE_CLOUD_ONLY: "true"
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    networks:
+      - cloud-network
+
+volumes:
+  couchdb-cloud-data:
+
+networks:
+  cloud-network:
+    driver: bridge
