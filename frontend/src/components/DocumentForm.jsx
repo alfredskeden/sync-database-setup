@@ -1,6 +1,12 @@
-import { useState, useId } from "react";
+import { useId, useState } from "react";
+
+const CLOUD_ONLY = process.env.CLOUD_ONLY === "true";
 
 export function DocumentForm({ onSubmit, isLoading }) {
+  if (CLOUD_ONLY) {
+    return null;
+  }
+
   const [author, setAuthor] = useState("");
   const [text, setText] = useState("");
   const [posX, setPosX] = useState("");

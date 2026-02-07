@@ -59,6 +59,7 @@ services:
     container_name: sync-frontend
     environment:
       VITE_API_URL: http://localhost:3001
+      CLOUD_ONLY: ${CLOUD_ONLY:-false}
     ports:
       - "5173:5173"
     depends_on:

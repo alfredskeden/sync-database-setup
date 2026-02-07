@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback, useId } from "react";
-import { SyncStatusBar } from "./components/SyncStatusBar.jsx";
-import { DocumentForm } from "./components/DocumentForm.jsx";
+import { useCallback, useEffect, useState } from "react";
 import { DocumentList } from "./components/DocumentList.jsx";
+import { SyncStatusBar } from "./components/SyncStatusBar.jsx";
 
 const API_BASE = "/api";
+const CLOUD_ONLY = process.env.CLOUD_ONLY === "true";
 
 function App() {
   const [localDocs, setLocalDocs] = useState([]);
@@ -14,6 +14,9 @@ function App() {
 
   const fetchLocalDocs = useCallback(async () => {
     try {
+      if (CLOUD_ONLY) {
+        return;
+      }
       const res = await fetch(`${API_BASE}/documents`);
       const data = await res.json();
       setLocalDocs(data);
@@ -112,48 +115,84 @@ function App() {
     }
   }, [refreshAll]);
 
-  return (
-    <div className="app">
-      <header className="app-header">
-        <h1>Local-First Database</h1>
-        <p>Save locally, sync to cloud, share with others</p>
-      </header>
+  console.log('CLOUD_ONLY ', CLOUD_ONLY);
 
-      <SyncStatusBar
-        syncStatus={syncStatus}
-        isSyncing={isSyncing}
-        onSync={handleManualSync}
-      />
+  if (CLOUD_ONLY) {
+    return (
+      <div className="app">
+        <header className="app-header">
+          <h1>Local-First Database</h1>
+          <p>Save locally, sync to cloud, share with others</p>
+        </header>
 
-      <div className="layout">
-        <div className="card">
-          <div className="card-header">
-            <span className="card-title">
-              <span className="badge badge--local">Local</span>
-              Local Documents ({localDocs.length})
-            </span>
+        <SyncStatusBar
+          syncStatus={syncStatus}
+          isSyncing={isSyncing}
+          onSync={handleManualSync}
+        />
+
+        <div className="layout">
+          <div className="card">
+            <div className="card-header">
+              <span className="card-title">
+                <span className="badge badge--cloud">Cloud</span>
+                Cloud Documents ({cloudDocs.length})
+              </span>
+            </div>
+            <DocumentList
+              documents={cloudDocs}
+              emptyMessage="No cloud documents yet. Documents will appear here after sync."
+            />
           </div>
-          <DocumentList
-            documents={localDocs}
-            onDelete={handleDeleteDocument}
-            emptyMessage="No local documents yet. Add one above."
-          />
-        </div>
-        <div className="card">
-          <div className="card-header">
-            <span className="card-title">
-              <span className="badge badge--cloud">Cloud</span>
-              Cloud Documents ({cloudDocs.length})
-            </span>
-          </div>
-          <DocumentList
-            documents={cloudDocs}
-            emptyMessage="No cloud documents yet. Documents will appear here after sync."
-          />
         </div>
       </div>
-    </div>
-  );
+    );
+  } else {
+    return (
+      <div className="app">
+        <header className="app-header">
+          <h1>Local-First Database</h1>
+          <p>Save locally, sync to cloud, share with others</p>
+        </header>
+
+        <SyncStatusBar
+          syncStatus={syncStatus}
+          isSyncing={isSyncing}
+          onSync={handleManualSync}
+        />
+
+        <div className="layout">
+          <div className="card">
+            <div className="card-header">
+              <span className="card-title">
+                <span className="badge badge--local">Local</span>
+                Local Documents ({localDocs.length})
+              </span>
+            </div>
+            <DocumentList
+              documents={localDocs}
+              onDelete={handleDeleteDocument}
+              emptyMessage="No local documents yet. Add one above."
+            />
+          </div>
+          <div className="card">
+            <div className="card-header">
+              <span className="card-title">
+                <span className="badge badge--cloud">Cloud</span>
+                Cloud Documents ({cloudDocs.length})
+              </span>
+            </div>
+            <DocumentList
+              documents={cloudDocs}
+              emptyMessage="No cloud documents yet. Documents will appear here after sync."
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+
 }
 
 export default App;
