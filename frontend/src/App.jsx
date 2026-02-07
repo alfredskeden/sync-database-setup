@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useState } from "react";
 import { DocumentList } from "./components/DocumentList.jsx";
 import { SyncStatusBar } from "./components/SyncStatusBar.jsx";
@@ -88,53 +87,24 @@ function App() {
     }
   }, [refreshAll]);
 
-  console.log('CLOUD_ONLY ', CLOUD_ONLY);
+  return (
+    <div className="app">
+      <header className="app-header">
+        <h1>{CLOUD_ONLY ? "Cloud Database" : "Local Database"}</h1>
+        <p>
+          {!CLOUD_ONLY &&
+            "Data is saved locally first, then synced to the cloud — so it works offline and stays fast, even with a slow or unreliable connection."}
+        </p>
+      </header>
 
-  if (CLOUD_ONLY) {
-    return (
-      <div className="app">
-        <header className="app-header">
-          <h1>Local-First Database</h1>
-          <p>Save locally, sync to cloud, share with others</p>
-        </header>
+      <SyncStatusBar
+        syncStatus={syncStatus}
+        isSyncing={isSyncing}
+        onSync={handleManualSync}
+      />
 
-        <SyncStatusBar
-          syncStatus={syncStatus}
-          isSyncing={isSyncing}
-          onSync={handleManualSync}
-        />
-
-        <div className="layout">
-          <div className="card">
-            <div className="card-header">
-              <span className="card-title">
-                <span className="badge badge--cloud">Cloud</span>
-                Cloud Documents ({cloudDocs.length})
-              </span>
-            </div>
-            <DocumentList
-              documents={cloudDocs}
-              emptyMessage="No cloud documents yet. Documents will appear here after sync."
-            />
-          </div>
-        </div>
-      </div>
-    );
-  } else {
-    return (
-      <div className="app">
-        <header className="app-header">
-          <h1>Local-First Database</h1>
-          <p>Save locally, sync to cloud, share with others</p>
-        </header>
-
-        <SyncStatusBar
-          syncStatus={syncStatus}
-          isSyncing={isSyncing}
-          onSync={handleManualSync}
-        />
-
-        <div className="layout">
+      <div className="layout">
+        {!CLOUD_ONLY && (
           <div className="card">
             <div className="card-header">
               <span className="card-title">
@@ -148,24 +118,22 @@ function App() {
               emptyMessage="No local documents yet. Add one above."
             />
           </div>
-          <div className="card">
-            <div className="card-header">
-              <span className="card-title">
-                <span className="badge badge--cloud">Cloud</span>
-                Cloud Documents ({cloudDocs.length})
-              </span>
-            </div>
-            <DocumentList
-              documents={cloudDocs}
-              emptyMessage="No cloud documents yet. Documents will appear here after sync."
-            />
+        )}
+        <div className={`card ${CLOUD_ONLY && "full-width"}`}>
+          <div className="card-header">
+            <span className="card-title">
+              <span className="badge badge--cloud">Cloud</span>
+              Cloud Documents ({cloudDocs.length})
+            </span>
           </div>
+          <DocumentList
+            documents={cloudDocs}
+            emptyMessage="No cloud documents yet. Documents will appear here after sync."
+          />
         </div>
       </div>
-    );
-  }
-
-
+    </div>
+  );
 }
 
 export default App;
