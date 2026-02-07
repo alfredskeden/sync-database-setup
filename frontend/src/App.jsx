@@ -93,7 +93,7 @@ function App() {
         <h1>{CLOUD_ONLY ? "Cloud Database" : "Local Database"}</h1>
         <p>
           {!CLOUD_ONLY &&
-            "Data is saved locally first, then synced to the cloud — so it works offline and stays fast, even with a slow or unreliable connection."}
+            "Data is saved locally first, then synced to the cloud. So it works offline and stays fast, even with a slow or unreliable connection."}
         </p>
       </header>
 
